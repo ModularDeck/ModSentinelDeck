@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432  # Direct traffic to port 5432 of the Pods
+  selector:
+    app: postgres
+  clusterIP: None  # Headless service for internal communication
