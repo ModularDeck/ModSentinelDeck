@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinel-deployment
+spec:
+  replicas: 2  # Number of pods for scaling
+  selector:
+    matchLabels:
+      app: sentinel
+  strategy:  # Add this section for deployment strategy
+    type: RollingUpdate  # This is the default, but explicitly stating it can clarify intent
+  template:
+    metadata:
+      labels:
+        app: sentinel
+    spec:
+      containers:
+        - name: sentinel
+          image: sentinel:v1.0.2  # Ensure this image is built and available in your local Docker registry
+          imagePullPolicy: IfNotPresent  # Set the image pull policy
+          ports:
+            - containerPort: 8080
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: postgres-user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: postgres-password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: postgres-db
+            - name: POSTGRES_HOST
+              value: postgres-service  # Assuming your PostgreSQL service is named "db"
+            - name: DATABASE_URL
+              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):5432/$(POSTGRES_DB)?sslmode=disable
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret  # Reference to your secret
+                  key: JWT_SECRET        # Secret key in your secret YAML file
+          resources:
+            limits:
+              memory: "256Mi"  # Limit memory usage
+              cpu: "500m"      # Limit CPU usage
+            requests:
+              memory: "128Mi"  # Request memory
+              cpu: "250m"      # Request CPU
+          readinessProbe:  # Ensure the container is ready before traffic is sent to it
+            httpGet:
+              path: /health  # Adjust this path according to your app
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:  # Restart container if it becomes unresponsive
+            httpGet:
+              path: /health  # Adjust this path according to your app
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
