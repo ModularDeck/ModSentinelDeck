@@ -7,5 +7,9 @@ spec:
     - port: 5432
       targetPort: 5432  # Direct traffic to port 5432 of the Pods
   selector:
-    app: postgres
-  clusterIP: None  # Headless service for internal communication
+    app: postgres  # Ensure this matches the label in the Deployment
+  type: ClusterIP  # Default service type, accessible only within the cluster
+  
+  # Optional: Uncomment the following line to create a headless service 
+  #to allow direct access to the Pods without a load balancer.
+ # clusterIP: None  # Headless service for internal communication
