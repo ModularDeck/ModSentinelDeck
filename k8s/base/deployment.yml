@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: sentinel
-          image: sentinel:v1.0.2  # Ensure this image is built and available in your local Docker registry
+          image: sentinel:v1.0.3  # Ensure this image is built and available in your local Docker registry
           imagePullPolicy: IfNotPresent  # Set the image pull policy
           ports:
             - containerPort: 8080

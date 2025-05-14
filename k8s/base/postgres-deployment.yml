@@ -6,14 +6,14 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: postgres
+      app: sentinel-postgres
   template:
     metadata:
       labels:
-        app: postgres
+        app: sentinel-postgres
     spec:
       containers:
-        - name: postgres
+        - name: sentinel-postgres
           image: postgres:16.4
           ports:
             - containerPort: 5432
@@ -59,12 +59,15 @@ spec:
       volumes:
         - name: postgres-storage
           persistentVolumeClaim:
-            claimName: postgres-pvc
+            claimName: sentinel-postgres-pvc
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: postgres-pvc
+  name: sentinel-postgres-pvc
+  labels:
+    app: sentinel-postgres
+    tier: database
 spec:
   accessModes:
     - ReadWriteOnce
