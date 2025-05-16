@@ -9,4 +9,4 @@ spec:
   ports:
     - port: 8080          # Port that the service will expose
       targetPort: 8080    # Port on the container to forward to
-      nodePort: 30007     # Optional: specify a nodePort (if omitted, Kubernetes will assign one)
+      nodePort: 30008     # Optional: specify a nodePort (if omitted, Kubernetes will assign one)

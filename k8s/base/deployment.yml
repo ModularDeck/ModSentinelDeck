@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: sentinel
-          image: sentinel:v1.0.2  # Ensure this image is built and available in your local Docker registry
+          image: sentinel:v1.0.3  # Ensure this image is built and available in your local Docker registry
           imagePullPolicy: IfNotPresent  # Set the image pull policy
           ports:
             - containerPort: 8080
@@ -37,7 +37,7 @@ spec:
                   name: postgres-secret
                   key: postgres-db
             - name: POSTGRES_HOST
-              value: postgres-service  # Assuming your PostgreSQL service is named "db"
+              value: sentinel-postgres-service  # Assuming your PostgreSQL service is named "db"
             - name: DATABASE_URL
               value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):5432/$(POSTGRES_DB)?sslmode=disable
             - name: JWT_SECRET

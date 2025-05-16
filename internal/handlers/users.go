@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"sentinel/internal/auth"
 	"sentinel/internal/db"
 	"sentinel/internal/models"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -37,6 +39,7 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	// Start transaction
 	tx, err := db.DB.Begin()
 	if err != nil {
+		log.Println("Failed to start transaction:", err)
 		http.Error(w, "Failed to start transaction", http.StatusInternalServerError)
 		return
 	}
@@ -125,10 +128,21 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 
 // GetUserDetails fetches the user along with tenant and team information
 func GetUserDetails(w http.ResponseWriter, r *http.Request) {
-	userIDStr := r.URL.Query().Get("id") // expecting ?id= in the URL query
-	userID, err := strconv.Atoi(userIDStr)
+	// userIDStr := r.URL.Query().Get("id") // expecting ?id= in the URL query
+	// userID, err := strconv.Atoi(userIDStr)
 
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	if id == "" {
+		log.Println("Missing user ID")
+		http.Error(w, "Missing user ID", http.StatusBadRequest)
+		return
+	}
+	// Convert userID from string to int
+	userID, err := strconv.Atoi(id)
 	if err != nil {
+		log.Println("Invalid user ID:", err)
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
 	}
