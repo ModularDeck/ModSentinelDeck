@@ -1,5 +1,5 @@
 # Stage 1: Build the Go binary
-FROM golang:latest AS builder
+FROM golang:1.23.0 AS builder
 
 WORKDIR /app
 
@@ -10,19 +10,28 @@ RUN go mod download
 # Copy the rest of the application source code
 COPY . .
 
-# Build the application
-RUN go build -o sentinel ./cmd/server/main.go
-# Use the latest Alpine image for a smaller final image
+# Build a statically linked binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o sentinel ./cmd/server/main.go
+
 # Stage 2: Create a minimal image to run the compiled binary
 FROM alpine:latest
 
 WORKDIR /app
 
-# Copy the compiled Go binary from the builder stage
+# Install CA certificates (optional but often needed for HTTPS)
+RUN apk --no-cache add ca-certificates
+
+# Copy the statically linked Go binary
 COPY --from=builder /app/sentinel .
 
-# Make the binary executable
+# Make sure it's executable
 RUN chmod +x ./sentinel
 
-# Add version label
-LABEL version="1.0.0" 
+# Optionally add a version label
+LABEL version="1.0.1"
+
+# Expose the port the app runs on
+EXPOSE 8080
+
+# Run the binary
+ENTRYPOINT ["./sentinel"]

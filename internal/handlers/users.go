@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"sentinel/internal/auth"
 	"sentinel/internal/db"
 	"sentinel/internal/models"
@@ -37,6 +38,7 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	// Start transaction
 	tx, err := db.DB.Begin()
 	if err != nil {
+		log.Println("Failed to start transaction:", err)
 		http.Error(w, "Failed to start transaction", http.StatusInternalServerError)
 		return
 	}

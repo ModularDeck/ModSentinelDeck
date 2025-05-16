@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sentinel-db-init
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+        - name: init-postgres
+          image: postgres:16.4
+          env:
+            - name: PGPASSWORD
+              value: "sysadmin1"
+            - name: PGUSER  
+              value: "sentineluser"
+            - name: PGDATABASE
+              value: "sentineldb"
+          volumeMounts:
+            - name: init-sql-volume
+              mountPath: /scripts/init.sql
+              subPath: init.sql
+            - name: schema-volume
+              mountPath: /scripts/schema.sql
+              subPath: schema.sql
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting for sentineluser-postgres-service:5432 to be available..."
+              until pg_isready -h sentinel-postgres-service -p 5432 -U sentineluser; do
+                echo "Postgres is unavailable - sleeping"
+                sleep 2
+              done
+
+              echo "Creating DB and user in default DB..."
+              psql postgresql://sentineluser:sysadmin1@sentinel-postgres-service:5432/postgres -f /scripts/init.sql
+
+              echo "Applying schema to sentineldb..."
+              psql postgres://sentineluser:sysadmin1@sentinel-postgres-service:5432/sentineldb -f /scripts/schema.sql
+      restartPolicy: Never
+      volumes:
+        - name: init-sql-volume
+          configMap:
+            name: init-db-script
+            items:
+              - key: init.sql
+                path: init.sql
+        - name: schema-volume
+          configMap:
+            name: sentinel-schema-script
+
