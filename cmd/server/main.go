@@ -42,7 +42,7 @@ func main() {
 	// Secure routes with JWT middleware
 	secure := r.PathPrefix("/api").Subrouter()
 	secure.Use(auth.AuthMiddleware)
-	secure.HandleFunc("/user", handlers.GetUserDetails).Methods("GET")
+	secure.HandleFunc("/user/{id}", handlers.GetUserDetails).Methods("GET")
 	secure.HandleFunc("/user", handlers.UpdateUserDetails).Methods("PUT")
 	log.Println("Routers End")
 	log.Println("Sentinel starting on :8080")
