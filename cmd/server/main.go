@@ -41,7 +41,9 @@ func main() {
 
 	// Secure routes with JWT middleware
 	secure := r.PathPrefix("/api").Subrouter()
-	secure.Use(auth.AuthMiddleware)
+	secure.Use(func(next http.Handler) http.Handler {
+		return auth.AuthMiddleware(next, db.DB) // Wrap AuthMiddleware to match mux.MiddlewareFunc
+	})
 	secure.HandleFunc("/user/{id}", handlers.GetUserDetails).Methods("GET")
 	secure.HandleFunc("/user", handlers.UpdateUserDetails).Methods("PUT")
 	log.Println("Routers End")

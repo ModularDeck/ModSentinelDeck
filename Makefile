@@ -6,14 +6,14 @@ POSTGRES_SERVICE=k8s/base/postgres-service.yml
 APP_DEPLOYMENT=k8s/base/deployment.yml
 APP_SERVICE=k8s/base/service.yml
 
-IMAGE_TAG=v1.0.3
+IMAGE_TAG=v1.0.4
 
 .PHONY: all up build-image postgres app port-forward run stop clean
 
 # One-liner to start everything
 all: up build-image postgres app migrate port-forward validate
 
-build: postgres app port-forward
+build: build-image app port-forward
 
 # Start Minikube if not already running
 up:

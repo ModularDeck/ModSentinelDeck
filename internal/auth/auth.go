@@ -44,11 +44,20 @@ func GenerateJWT(email string, tenantID int, role string) (string, error) {
 	return tokenString, nil
 }
 
-// ValidateToken validates the JWT token
-func ValidateToken(tokenStr string) (*Claims, error) {
+// Patch point for blacklist check
+var isTokenBlacklisted = func(token string) (bool, error) {
+	var exists bool
+	err := db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM token_blacklist WHERE token=$1)", token).Scan(&exists)
+	return exists, err
+}
+
+// Patch point for ValidateToken to allow mocking in tests
+var ValidateToken = validateToken
+
+func validateToken(tokenStr string) (*Claims, error) {
 	log.Println("Starting JWT token validation...")
 
-	// Fetch JWT secret from environment variabless
+	// Fetch JWT secret from environment variables
 	if jwtKey == "" {
 		log.Println("JWT secret not found in environment variables.")
 		return nil, errors.New("JWT secret not found")
@@ -64,15 +73,25 @@ func ValidateToken(tokenStr string) (*Claims, error) {
 
 	if err != nil {
 		log.Printf("Error parsing token: %v\n", err)
-		if err == jwt.ErrSignatureInvalid {
-			return nil, errors.New("invalid token signature")
+		// Handle specific JWT validation errors
+		if ve, ok := err.(*jwt.ValidationError); ok {
+			if ve.Errors&jwt.ValidationErrorExpired != 0 {
+				return nil, errors.New("token is expired")
+			}
+			if ve.Errors&jwt.ValidationErrorSignatureInvalid != 0 {
+				return nil, errors.New("invalid token signature")
+			}
 		}
 		return nil, errors.New("error validating token")
 	}
 
-	var exists bool
-	x := db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM token_blacklist WHERE token=$1)", tokenStr).Scan(&exists)
-	if x != nil || exists {
+	// Check if the token is blacklisted
+	exists, err := isTokenBlacklisted(tokenStr)
+	if err != nil {
+		log.Println("Token blacklist check error.")
+		return nil, errors.New("token is expired")
+	}
+	if exists {
 		log.Println("Token in token_blacklist.")
 		return nil, errors.New("token is expired")
 	}
