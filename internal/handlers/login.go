@@ -15,6 +15,11 @@ import (
 )
 
 // LoginHandler verifies the user's credentials and returns a JWT with tenant support
+// It also sets the JWT token in a cookie for the client
+// The function expects the request body to contain email, password, and tenant_id
+// The function also checks if the user exists in the database and if the password matches
+// If the user is valid, it generates a JWT token and sets it in a cookie
+// If the user is invalid, it returns an error response
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var dbUser models.User
 

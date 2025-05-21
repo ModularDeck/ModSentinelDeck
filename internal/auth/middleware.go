@@ -2,14 +2,18 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log"
 	"net/http"
-	"sentinel/internal/db"
 	"strings"
 	"sync"
 
 	"golang.org/x/time/rate"
+)
+
+const (
+	ErrTooManyRequests = "Too Many Requests"
 )
 
 type ctxKey string
@@ -20,7 +24,7 @@ const (
 )
 
 // AuthMiddleware checks for the JWT token and validates it
-func AuthMiddleware(next http.Handler) http.Handler {
+func AuthMiddleware(next http.Handler, dbInstance *sql.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -30,7 +34,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		// Extract token
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := ValidateToken(tokenStr)
+		claims, err := ValidateToken(tokenStr) // Ensure ValidateToken is implemented and imported
 		log.Printf("Printing token %s", tokenStr)
 		if err != nil {
 			log.Println("Middleware error")
@@ -40,7 +44,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		var exists bool
-		x := db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM token_blacklist WHERE token=$1)", tokenStr).Scan(&exists)
+		x := dbInstance.QueryRow("SELECT EXISTS(SELECT 1 FROM token_blacklist WHERE token=$1)", tokenStr).Scan(&exists)
 		if x != nil || exists {
 			log.Printf("Printing token 2 %s", tokenStr)
 			http.Error(w, "Token is invalid", http.StatusUnauthorized)
@@ -85,28 +89,33 @@ func GetEmail(ctx context.Context) (string, error) {
 }
 
 // User-specific rate limiter map
-var userLimiters = make(map[string]*rate.Limiter)
-var mu sync.Mutex
+var (
+	userLimiters = make(map[string]*rate.Limiter)
+	mu           sync.Mutex
+)
 
 // Function to get or create a rate limiter for a specific user (by IP or token)
-func getUserLimiter(user string) *rate.Limiter {
+func getUserLimiter(user string, rateLimit rate.Limit, burstSize int) *rate.Limiter {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if limiter, exists := userLimiters[user]; exists {
+	limiter, exists := userLimiters[user]
+	if exists {
 		return limiter
 	}
-
-	limiter := rate.NewLimiter(1, 3) // 1 request per second, burst size 3
-	userLimiters[user] = limiter
+	limiter = rate.NewLimiter(rateLimit, burstSize)
 	return limiter
 }
 
 // RateLimitMiddleware applies rate limiting per user
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := r.RemoteAddr // Or use r.Header.Get("Authorization") for token-based
-		limiter := getUserLimiter(user)
+		user := r.Header.Get("Authorization") // Or use r.Header.Get("Authorization") for token-based
+		const rateLimit = 1.0                 // requests per second (minimum for testing)
+		const burstSize = 3                   // burst size (minimum for testing)
+		limiter := getUserLimiter(user, rate.Limit(rateLimit), burstSize)
+		log.Println("Rate limiting started for user", user)
+
 		if !limiter.Allow() {
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
