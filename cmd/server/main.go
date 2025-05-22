@@ -32,15 +32,16 @@ func main() {
 	r.HandleFunc("/health", healthHandler).Methods("GET")
 
 	// Public routes
-	r.HandleFunc("/login", handlers.LoginHandler).Methods("POST")
+	r.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		handlers.LoginHandler(w, r, db.DB)
+	}).Methods("POST")
 	r.HandleFunc("/register", handlers.RegisterUser).Methods("POST")
 	r.HandleFunc("/logout", handlers.LogoutHandler).Methods("POST") // Add this for logout
 
-	// Apply rate limiting to public routes
-	r.Use(auth.RateLimitMiddleware)
-
 	// Secure routes with JWT middleware
 	secure := r.PathPrefix("/api").Subrouter()
+	// Apply rate limiting to public routes
+	r.Use(auth.RateLimitMiddleware)
 	secure.Use(func(next http.Handler) http.Handler {
 		return auth.AuthMiddleware(next, db.DB) // Wrap AuthMiddleware to match mux.MiddlewareFunc
 	})
