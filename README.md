@@ -135,6 +135,31 @@ curl -X POST http://localhost:8080/login \
 
 ---
 
+
+
+### 🚪 User Logout
+
+```bash
+curl -X POST http://localhost:8080/logout \
+-H "Authorization: Bearer <your_jwt_token>" \
+-H "Content-Type: application/json"
+```
+
+- **Description:** Logs out a user by invalidating their JWT.
+- **Method:** `POST`
+- **Endpoint:** `/logout`
+- **Headers:**
+  - `Authorization: Bearer <your_jwt_token>`
+  - `Content-Type: application/json`
+- **Response:** `200 OK`
+- **Response Example:**
+  ```json
+  {
+    "message": "User logged out successfully"
+  }
+  ```
+  *(Returns an appropriate error: `401 Unauthorized` if the JWT is missing, `500 Internal Server Error` for any other issue.)*
+
 ### 👤 Get User Info
 
 ```bash
@@ -165,3 +190,4 @@ curl -X GET http://localhost:8080/api/user/{id} \
   *(Returns an appropriate error: `401 Unauthorized`, `404 Not Found` if the request fails.)*
 
 ---
+
