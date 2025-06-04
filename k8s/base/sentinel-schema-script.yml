@@ -4,16 +4,52 @@ metadata:
   name: sentinel-schema-script
 data:
   schema.sql: |
-    DROP TABLE IF EXISTS user_teams, teams, users, tenants CASCADE;
+    
+    -- DROP existing tables for clean slate
+    DROP TABLE IF EXISTS approvals, approval_flows, approval_group_members, approval_groups,
+    user_modules, modules, user_teams, teams, users, tenants, token_blacklist CASCADE;
 
+    -- Tenants table
     CREATE TABLE IF NOT EXISTS tenants (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) UNIQUE NOT NULL,
         description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        tier_id int,
+        status VARCHAR(50) DEFAULT 'active',
+        UNIQUE (name)
     );
 
+    create table if not exists tenant_settings (
+        tenant_id int primary key references tenants(id) on delete cascade,
+        settings jsonb default '{}'::jsonb,
+        created_at timestamp default current_timestamp,
+        updated_at timestamp default current_timestamp
+    );
+
+    create table if not exists tiers (
+            id serial primary key,
+            name varchar(50) unique not null,
+            description text,
+            max_users int default 5,
+            max_teams int default 2,
+            max_modules int default 2,
+            max_approval_groups int default 2,
+            created_at timestamp default current_timestamp,
+            updated_at timestamp default current_timestamp
+        ); 
+
+
+    -- Insert default tiers
+    INSERT INTO tiers (name, description, max_users, max_teams, max_modules, max_approval_groups)
+    VALUES
+        ('free', 'Free tier with limited features', 5, 2, 2, 2),
+        ('pro', 'Pro tier with additional features', 100, 50, 20, 10),
+        ('enterprise', 'Enterprise tier with all features', NULL, NULL, NULL, NULL)
+    ON CONFLICT (name) DO NOTHING;
+ 
+    -- Users table
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE,
@@ -21,11 +57,20 @@ data:
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         role VARCHAR(50) DEFAULT 'member',
+        email_confirmed BOOLEAN DEFAULT FALSE,
+        confirmation_token VARCHAR(255),
+        reset_token VARCHAR(255),
+        reset_token_expiry TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (tenant_id, email)
     );
+    -- Index for faster email lookups
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+    -- Index for faster tenant lookups
+    CREATE INDEX IF NOT EXISTS idx_users_tenant ON users (tenant_id);
 
+    -- Teams table
     CREATE TABLE IF NOT EXISTS teams (
         id SERIAL PRIMARY KEY,
         tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE,
@@ -35,20 +80,97 @@ data:
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (tenant_id, name)
     );
+    -- Index for faster team lookups
+    CREATE INDEX IF NOT EXISTS idx_teams_tenant ON teams (tenant_id);
+    -- Index for faster team name lookups
+    CREATE INDEX IF NOT EXISTS idx_teams_name ON teams (name);
 
+    -- User_Teams table
     CREATE TABLE IF NOT EXISTS user_teams (
         id SERIAL PRIMARY KEY,
         user_id INT REFERENCES users(id) ON DELETE CASCADE,
         team_id INT REFERENCES teams(id) ON DELETE CASCADE,
         role VARCHAR(50) DEFAULT 'member',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT user_teams_unique UNIQUE (user_id, team_id)
     );
 
-    ALTER TABLE user_teams ADD CONSTRAINT user_teams_unique UNIQUE (user_id, team_id);
-
+    -- Token blacklist table
     CREATE TABLE IF NOT EXISTS token_blacklist (
         token TEXT PRIMARY KEY,
         expiration TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW()
     );
+
+    -- Modules table
+    CREATE TABLE IF NOT EXISTS modules (
+        id SERIAL PRIMARY KEY,
+        tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE,
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (tenant_id, name)
+    );
+
+
+    -- User Modules table
+    CREATE TABLE IF NOT EXISTS user_modules (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        module_id INT REFERENCES modules(id) ON DELETE CASCADE,
+        access_level VARCHAR(50) DEFAULT 'read',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, module_id)
+    );
+
+    -- Approval Groups
+    CREATE TABLE IF NOT EXISTS approval_groups (
+        id SERIAL PRIMARY KEY,
+        tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (tenant_id, name)
+    );
+
+    -- Approval Group Members
+    CREATE TABLE IF NOT EXISTS approval_group_members (
+        id SERIAL PRIMARY KEY,
+        group_id INT REFERENCES approval_groups(id) ON DELETE CASCADE,
+        user_id INT REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (group_id, user_id)
+    );
+
+    -- Approval Flows
+    CREATE TABLE IF NOT EXISTS approval_flows (
+        id SERIAL PRIMARY KEY,
+        tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE,
+        object_type VARCHAR(100) NOT NULL,
+        object_id INT NOT NULL,
+        level INT NOT NULL CHECK (level BETWEEN 1 AND 5),
+        approval_group_id INT REFERENCES approval_groups(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (object_type, object_id, level)
+    );
+
+    -- Approvals
+    CREATE TABLE IF NOT EXISTS approvals (
+        id SERIAL PRIMARY KEY,
+        approval_flow_id INT REFERENCES approval_flows(id) ON DELETE CASCADE,
+        user_id INT REFERENCES users(id),
+        level INT NOT NULL CHECK (level BETWEEN 1 AND 5),
+        status VARCHAR(50) DEFAULT 'approved',
+        comment TEXT,
+        approved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (flow_id, level),
+        CONSTRAINT single_user_per_level UNIQUE (flow_id, user_id)
+    );
+
+

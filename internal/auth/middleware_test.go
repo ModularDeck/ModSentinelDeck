@@ -252,25 +252,25 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 
 func TestRateLimitMiddleware(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Authorization", "Bearer validtoken")
+	req.Header.Set("Authorization", "Bearer validuser")
 
-	rr := httptest.NewRecorder()
+	//rr := httptest.NewRecorder()
 
 	handler := RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-
 	}))
 
 	// Simulate multiple requests from the same user
-	for i := range 5 {
+	for i := 0; i < 5; i++ {
+		rr := httptest.NewRecorder() // Reset the response recorder for each request
 		handler.ServeHTTP(rr, req)
-		if i < 6 && rr.Code != http.StatusOK {
-			t.Errorf("expected 200, got %d", rr.Code)
+
+		if i < 3 && rr.Code != http.StatusOK {
+			t.Errorf("expected 200, got %d on request %d", rr.Code, i+1)
 		}
-		//fix this to 429
-		//else if i >= 3 && rr.Code != http.StatusTooManyRequests {
-		// 	t.Errorf("expected 429, got %d", rr.Code)
-		// }
+		if i >= 3 && rr.Code != http.StatusTooManyRequests {
+			t.Errorf("expected 429, got %d on request %d", rr.Code, i+1)
+		}
 	}
 }
 

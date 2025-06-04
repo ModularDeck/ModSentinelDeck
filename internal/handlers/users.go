@@ -190,6 +190,7 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request) {
 		Password   string `json:"password,omitempty"`
 		TenantName string `json:"tenant_name"`
 		TeamName   string `json:"team_name"`
+		Role       string `json:"role,omitempty"` // Role can be "admin", "member", etc.
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&req)
@@ -267,6 +268,80 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	if req.Role != "" {
+		// Update user role if provided
+		_, err = db.DB.Exec(`UPDATE users SET role=$1 WHERE id=$2`, req.Role, req.UserID)
+		if err != nil {
+			http.Error(w, "Error updating user role", http.StatusInternalServerError)
+			return
+		}
+	}
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "User details updated successfully"})
+}
+
+// GetUsersByTenant retrieves users by tenant ID
+func GetUsersByTenant(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	tenantID, err := strconv.Atoi(vars["tenant_id"])
+	if err != nil {
+		http.Error(w, "Invalid tenant ID", http.StatusBadRequest)
+		return
+	}
+
+	// Retrieve the user's email and tenant ID from the context
+	ctx := r.Context()
+	email, err := auth.GetEmail(ctx)
+	if err != nil || email == "" {
+		http.Error(w, "Unauthorized User", http.StatusUnauthorized)
+		return
+	}
+
+	var currentUser models.User
+	err = db.DB.QueryRow("SELECT id, email, role, tenant_id FROM users WHERE email=$1", email).Scan(&currentUser.ID, &currentUser.Email, &currentUser.Role, &currentUser.TenantID)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	// Check if the user is an admin and belongs to the same tenant
+	if currentUser.Role != "admin" || currentUser.TenantID != tenantID {
+		http.Error(w, "Unauthorized to access this tenant's users", http.StatusUnauthorized)
+		return
+	}
+
+	users, err := GetUsersByTenantDB(tenantID)
+	if err != nil {
+		http.Error(w, "Failed to fetch users", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+func GetUsersByTenantDB(tenantID int) ([]models.User, error) {
+	var users []models.User
+	rows, err := db.DB.Query(`
+		SELECT id, name, email, role, tenant_id, created_at, updated_at
+		FROM users
+		WHERE tenant_id = $1
+	`, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var user models.User
+		err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.TenantID, &user.CreatedAt, &user.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return users, nil
 }

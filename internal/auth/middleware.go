@@ -6,6 +6,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -94,28 +96,50 @@ var (
 	mu           sync.Mutex
 )
 
-// Function to get or create a rate limiter for a specific user (by IP or token)
-func getUserLimiter(user string, rateLimit rate.Limit, burstSize int) *rate.Limiter {
+func getUserLimiter(user string) *rate.Limiter {
 	mu.Lock()
 	defer mu.Unlock()
 
 	limiter, exists := userLimiters[user]
-	if exists {
-		return limiter
+	if !exists {
+		// Fetch rate limit configuration from environment variables or a config file
+		rateLimit := 1  // Default to 1 request per second
+		burstLimit := 3 // Default to a burst of 3 requests
+
+		// Example: Fetch from environment variables (you can replace this with your config logic)
+		if rl, ok := os.LookupEnv("RATE_LIMIT"); ok {
+			if parsedRate, err := strconv.Atoi(rl); err == nil {
+				rateLimit = parsedRate
+			}
+		}
+		if bl, ok := os.LookupEnv("BURST_LIMIT"); ok {
+			if parsedBurst, err := strconv.Atoi(bl); err == nil {
+				burstLimit = parsedBurst
+			}
+		}
+
+		limiter = rate.NewLimiter(rate.Limit(rateLimit), burstLimit)
+		userLimiters[user] = limiter
 	}
-	limiter = rate.NewLimiter(rateLimit, burstSize)
 	return limiter
 }
 
 // RateLimitMiddleware applies rate limiting per user
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := r.Header.Get("Authorization") // Or use r.Header.Get("Authorization") for token-based
-		const rateLimit = 1.0                 // requests per second (minimum for testing)
-		const burstSize = 3                   // burst size (minimum for testing)
-		limiter := getUserLimiter(user, rate.Limit(rateLimit), burstSize)
-		log.Println("Rate limiting started for user", user)
+		// Use the Authorization header as the user identifier
+		if r.URL.Path == "/health" || r.URL.Path == "/register" || r.URL.Path == "/login" || r.URL.Path == "/logout" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Extract user identifier from the Authorization header
+		user := r.Header.Get("Authorization")
+		if user == "" {
+			http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
+			return
+		}
 
+		limiter := getUserLimiter(user)
 		if !limiter.Allow() {
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return

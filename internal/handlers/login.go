@@ -3,11 +3,11 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
 	"sentinel/internal/auth"
-	"sentinel/internal/db"
 	"sentinel/internal/models"
 	"time"
 
@@ -20,7 +20,7 @@ import (
 // The function also checks if the user exists in the database and if the password matches
 // If the user is valid, it generates a JWT token and sets it in a cookie
 // If the user is invalid, it returns an error response
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
+func LoginHandler(w http.ResponseWriter, r *http.Request, dbInstance *sql.DB) {
 	var dbUser models.User
 
 	// Create a struct to parse tenant_id from the request body
@@ -38,7 +38,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch the user and tenant ID from the database
-	err = db.DB.QueryRow(`
+	err = dbInstance.QueryRow(`
 		SELECT u.id, u.name, u.password, u.tenant_id , u.role
 		FROM users u 
 		WHERE u.email=$1 AND u.tenant_id=$2`, loginRequest.Email, loginRequest.TenantID).Scan(&dbUser.ID, &dbUser.Name, &dbUser.Password, &dbUser.TenantID, &dbUser.Role)
