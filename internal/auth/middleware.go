@@ -128,6 +128,11 @@ func getUserLimiter(user string) *rate.Limiter {
 func RateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Use the Authorization header as the user identifier
+		if r.URL.Path == "/health" || r.URL.Path == "/register" || r.URL.Path == "/login" || r.URL.Path == "/logout" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Extract user identifier from the Authorization header
 		user := r.Header.Get("Authorization")
 		if user == "" {
 			http.Error(w, "Missing Authorization header", http.StatusUnauthorized)

@@ -191,3 +191,33 @@ curl -X GET http://localhost:8080/api/user/{id} \
 
 ---
 
+
+### 🏢 Get Users by Tenant (Admin Only)
+
+This endpoint retrieves a list of users associated with a specific tenant. Only users with the `admin` role are authorized to access this endpoint.
+
+- **Description:** Retrieves all users belonging to a specific tenant. Requires `admin` role and a valid JWT.
+- **Method:** `GET`
+- **Endpoint:** `/api/user/tenant/{tenant_id}`
+- **Headers:**
+  - `Authorization: Bearer <your_jwt_token>`
+  - `Content-Type: application/json`
+- **Path Parameters:**
+  - `tenant_id` (integer): The ID of the tenant whose users are to be retrieved.
+- **Response:** `200 OK`
+- **Response Example:**
+  ```json
+  [
+    {
+      "id": 1,
+      "tenant_id": 1,
+      "name": "John Doe",
+      "email": "user3@example.com",
+      "role": "admin",
+      "created_at": "2025-06-04T10:22:42.700791Z",
+      "updated_at": "2025-06-04T10:22:42.700791Z"
+    }
+  ]
+  ```
+  *(Returns an appropriate error: `401 Unauthorized`, `403 Forbidden`, `404 Not Found` if the request fails.)*
+

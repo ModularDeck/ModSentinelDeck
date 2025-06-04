@@ -46,6 +46,7 @@ func main() {
 		return auth.AuthMiddleware(next, db.DB) // Wrap AuthMiddleware to match mux.MiddlewareFunc
 	})
 	secure.HandleFunc("/user/{id}", handlers.GetUserDetails).Methods("GET")
+	secure.HandleFunc("/user/tenant/{tenant_id}", handlers.GetUsersByTenant).Methods("GET")
 	secure.HandleFunc("/user", handlers.UpdateUserDetails).Methods("PUT")
 	log.Println("Routers End")
 	log.Println("Sentinel starting on :8080")

@@ -6,12 +6,12 @@ POSTGRES_SERVICE=k8s/base/postgres-service.yml
 APP_DEPLOYMENT=k8s/base/deployment.yml
 APP_SERVICE=k8s/base/service.yml
 
-IMAGE_TAG=v1.0.4
+IMAGE_TAG=v1.0.5
 
 .PHONY: all up build-image postgres app port-forward run stop clean
 
 # One-liner to start everything
-all: up build-image postgres app migrate port-forward validate
+all: up build-image postgres migrate app  port-forward validate
 
 build: build-image app port-forward
 
@@ -86,6 +86,9 @@ clean:
 	kubectl delete -f k8s/base/init-db-configmap.yml --ignore-not-found
 	kubectl delete -f k8s/base/sentinel-schema-script.yml --ignore-not-found
 	kubectl delete -f k8s/base/db-init-job.yml --ignore-not-found
+	kubectl delete pod -l app=$(APP_NAME)-postgres --ignore-not-found
+	kubectl delete pod -l app=$(APP_NAME) --ignore-not-found
+	@echo "🧹 All resources cleaned up."
 	@echo "🧹 Cleanup completed."
 # @echo "🧹 Stopping Minikube..."
 # minikube stop
@@ -113,5 +116,5 @@ validate:
 # kubectl get secrets
 # kubectl describe  pod -l app=sentinel	
 # kubectl describe  pod -l app=sentinel-postgres
-# kubectl exec -it postgres-deployment-6565ff9c95-fchkk -- psql -U sentineluser -d crondb
+# kubectl exec -it postgres-deployment-d98596cf4-48vq7  -- psql -U sentineluser -d sentineldb
 	@echo "✅ Validation completed."
