@@ -275,7 +275,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 }
 
 func TestGetTenantID(t *testing.T) {
-	ctx := context.WithValue(context.Background(), tenantIDKey, 42)
+	ctx := context.WithValue(context.Background(), TenantIDKey, 42)
 	tenantID, err := GetTenantID(ctx)
 	if err != nil || tenantID != 42 {
 		t.Errorf("expected tenantID 42, got %v, err: %v", tenantID, err)

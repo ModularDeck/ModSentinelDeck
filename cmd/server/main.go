@@ -47,7 +47,8 @@ func main() {
 	})
 	secure.HandleFunc("/user/{id}", handlers.GetUserDetails).Methods("GET")
 	secure.HandleFunc("/user/tenant/{tenant_id}", handlers.GetUsersByTenant).Methods("GET")
-	secure.HandleFunc("/user", handlers.UpdateUserDetails).Methods("PUT")
+
+	secure.HandleFunc("/user", handlers.UpdateUserDetailsHandler).Methods("PUT")
 	log.Println("Routers End")
 	log.Println("Sentinel starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
