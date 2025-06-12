@@ -221,3 +221,73 @@ This endpoint retrieves a list of users associated with a specific tenant. Only 
   ```
   *(Returns an appropriate error: `401 Unauthorized`, `403 Forbidden`, `404 Not Found` if the request fails.)*
 
+
+---
+### 🛠️ Update User Details (Admin Only)
+
+```bash
+curl -X PUT http://localhost:8080/api/user \
+-H "Authorization: Bearer <your_jwt_token>" \
+-H "Content-Type: application/json" \
+-d '{
+  "user_id": 1,
+  "name": "Updated Name",
+  "email": "user3@example.com",
+  "password": "securepassword",
+  "tenant_name": "Updated Tenant 2",
+  "team_name": "Example Team 2",
+  "role": "admin"
+}'
+```
+
+- **Description:** Updates the details of an existing user. Only users with the `admin` role are authorized to perform this action.
+- **Method:** `PUT`
+- **Endpoint:** `/api/user`
+- **Headers:**
+  - `Authorization: Bearer <your_jwt_token>`
+  - `Content-Type: application/json`
+- **Request Body (JSON):**
+  ```json
+  {
+    "user_id": 1,
+    "name": "Updated Name",
+    "email": "user3@example.com",
+    "password": "securepassword",
+    "tenant_name": "Updated Tenant 2",
+    "team_name": "Example Team 2",
+    "role": "admin"
+  }
+  ```
+  - `user_id` (integer): ID of the user whose details are to be updated (required).
+  - `name` (string): New name of the user (optional).
+  - `email` (string): New email address (optional).
+  - `password` (string): New password (optional).
+  - `tenant_name` (string): New tenant name (optional).
+  - `team_name` (string): New or existing team to associate the user with (optional).
+  - `role` (string): Role to assign (e.g., "admin", "member") (optional).
+
+- **Response:** `200 OK`
+- **Response Example:**
+  ```json
+  {
+    "message": "User details updated successfully"
+  }
+  ```
+
+### 🧠 Business Logic
+
+- **Authorization:** Ensures the request is made by an authenticated user using a valid JWT.
+- **Permission Check:** Only users with the `admin` role can update user information.
+- **User Info Update:**
+  - Updates the user's name, email, and password (hashed).
+- **Tenant Update:**
+  - Updates the tenant name if provided.
+- **Team Update:**
+  - Associates the user with a new or existing team under the same tenant.
+- **Role Update:**
+  - Updates the user's role if specified.
+- **Error Handling:**
+  - Returns `401 Unauthorized` if the JWT is invalid or missing.
+  - Returns `403 Forbidden` if the user lacks the required permissions.
+  - Returns `404 Not Found` if the user or associated entities are not found.
+
