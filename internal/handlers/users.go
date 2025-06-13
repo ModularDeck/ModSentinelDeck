@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"log"
 	"sentinel/internal/auth"
 	"sentinel/internal/db"
@@ -181,8 +182,12 @@ func GetUserDetails(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func UpdateUserDetailsHandler(w http.ResponseWriter, r *http.Request) {
+	UpdateUserDetails(w, r, db.DB) // Pass the global db instance here
+}
+
 // UpdateUserDetails updates user, tenant, and team information
-func UpdateUserDetails(w http.ResponseWriter, r *http.Request) {
+func UpdateUserDetails(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	var req struct {
 		UserID     int    `json:"user_id"`
 		Name       string `json:"name"`
@@ -209,7 +214,7 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request) {
 
 	// Check if the user trying to update is the owner of the UserID
 	var currentUser models.User
-	err = db.DB.QueryRow("SELECT id, email, role FROM users WHERE id=$1", req.UserID).Scan(&currentUser.ID, &currentUser.Email, &currentUser.Role)
+	err = db.QueryRow("SELECT id, email, role FROM users WHERE id=$1", req.UserID).Scan(&currentUser.ID, &currentUser.Email, &currentUser.Role)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -221,14 +226,19 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Hash the new password if provided
-	if req.Password != "" && req.Email != "" {
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	var hashedPassword string
+	if req.Password != "" {
+		passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
 			http.Error(w, "Error creating password", http.StatusInternalServerError)
 			return
 		}
+		hashedPassword = string(passwordHash)
+	}
+
+	if req.Password != "" && req.Email != "" {
 		// Update user with password
-		_, err = db.DB.Exec(`UPDATE users SET name=$1, email=$2, password=$3 WHERE id=$4`,
+		_, err = db.Exec(`UPDATE users SET name=$1, email=$2, password=$3 WHERE id=$4`,
 			req.Name, req.Email, hashedPassword, req.UserID)
 		if err != nil {
 			http.Error(w, "Error inserting password", http.StatusInternalServerError)
@@ -237,7 +247,7 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request) {
 	} else {
 
 		if req.Name != "" {
-			_, err = db.DB.Exec(`UPDATE users SET name=$1 WHERE id=$2`,
+			_, err = db.Exec(`UPDATE users SET name=$1 WHERE id=$2`,
 				req.Name, req.UserID)
 		}
 	}
@@ -248,7 +258,7 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request) {
 
 	// Update tenant information
 	if req.TenantName != "" {
-		_, err = db.DB.Exec(`UPDATE tenants SET name=$1 WHERE id=(SELECT tenant_id FROM users WHERE id=$2)`, req.TenantName, req.UserID)
+		_, err = db.Exec(`UPDATE tenants SET name=$1 WHERE id=(SELECT tenant_id FROM users WHERE id=$2)`, req.TenantName, req.UserID)
 		if err != nil {
 			http.Error(w, "Error updating tenant", http.StatusInternalServerError)
 			return
@@ -258,10 +268,10 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request) {
 	// Update or create a new team for the user
 	if req.TeamName != "" {
 		var teamID int
-		err = db.DB.QueryRow(`SELECT id FROM teams WHERE name=$1 AND tenant_id=(SELECT tenant_id FROM users WHERE id=$2)`, req.TeamName, req.UserID).Scan(&teamID)
+		err = db.QueryRow(`SELECT id FROM teams WHERE name=$1 AND tenant_id=(SELECT tenant_id FROM users WHERE id=$2)`, req.TeamName, req.UserID).Scan(&teamID)
 		if err == nil {
 			// Team exists, update user_team relation
-			_, err = db.DB.Exec(`UPDATE user_teams SET team_id=$1 WHERE user_id=$2`, teamID, req.UserID)
+			_, err = db.Exec(`UPDATE user_teams SET team_id=$1 WHERE user_id=$2`, teamID, req.UserID)
 			if err != nil {
 				http.Error(w, "Error updating user team", http.StatusInternalServerError)
 				return
@@ -271,7 +281,7 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request) {
 
 	if req.Role != "" {
 		// Update user role if provided
-		_, err = db.DB.Exec(`UPDATE users SET role=$1 WHERE id=$2`, req.Role, req.UserID)
+		_, err = db.Exec(`UPDATE users SET role=$1 WHERE id=$2`, req.Role, req.UserID)
 		if err != nil {
 			http.Error(w, "Error updating user role", http.StatusInternalServerError)
 			return

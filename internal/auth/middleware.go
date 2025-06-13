@@ -18,11 +18,11 @@ const (
 	ErrTooManyRequests = "Too Many Requests"
 )
 
-type ctxKey string
+type CtxKey string
 
 const (
-	emailKey    ctxKey = "email"
-	tenantIDKey ctxKey = "tenant_id"
+	EmailKey    CtxKey = "email"
+	TenantIDKey CtxKey = "tenant_id"
 )
 
 // AuthMiddleware checks for the JWT token and validates it
@@ -55,8 +55,8 @@ func AuthMiddleware(next http.Handler, dbInstance *sql.DB) http.Handler {
 
 		// Add claims to request context
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, emailKey, claims.Email)
-		ctx = context.WithValue(ctx, tenantIDKey, claims.TenantID)
+		ctx = context.WithValue(ctx, EmailKey, claims.Email)
+		ctx = context.WithValue(ctx, TenantIDKey, claims.TenantID)
 		r = r.WithContext(ctx)
 
 		// Proceed to the next handler
@@ -66,7 +66,7 @@ func AuthMiddleware(next http.Handler, dbInstance *sql.DB) http.Handler {
 
 // GetTenantID fetches the tenant_id from the context
 func GetTenantID(ctx context.Context) (int, error) {
-	tenantIDValue := ctx.Value(tenantIDKey) // Fetch from context using tenantIDKey
+	tenantIDValue := ctx.Value(TenantIDKey) // Fetch from context using tenantIDKey
 	tenantID, ok := tenantIDValue.(int)
 	log.Printf("tenantid %x", tenantID)
 
@@ -79,7 +79,7 @@ func GetTenantID(ctx context.Context) (int, error) {
 
 // GetEmail fetches the email from the context
 func GetEmail(ctx context.Context) (string, error) {
-	emailValue := ctx.Value(emailKey) // Fetch from context using emailKey
+	emailValue := ctx.Value(EmailKey) // Fetch from context using emailKey
 	email, ok := emailValue.(string)
 	log.Printf("email: %s", email)
 
