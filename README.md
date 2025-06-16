@@ -1,6 +1,6 @@
-# Sentinel
+# ModSentinelDeck
 
-🚀 **Sentinel** is a modular, multi-tenant ready user management system written in Go. It acts as a guardian for your user data.
+🚀 **Mod-Sentinel-Deck** is a modular, multi-tenant ready user management system written in Go. It acts as a guardian for your user data.
 
 *"To watch over as a guard!"*
 
