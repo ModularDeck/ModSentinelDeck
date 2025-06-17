@@ -132,26 +132,53 @@ func GetUserDetails(w http.ResponseWriter, r *http.Request) {
 	// userIDStr := r.URL.Query().Get("id") // expecting ?id= in the URL query
 	// userID, err := strconv.Atoi(userIDStr)
 
-	vars := mux.Vars(r)
-	id := vars["id"]
-
-	if id == "" {
-		log.Println("Missing user ID")
-		http.Error(w, "Missing user ID", http.StatusBadRequest)
-		return
-	}
-	// Convert userID from string to int
-	userID, err := strconv.Atoi(id)
-	if err != nil {
-		log.Println("Invalid user ID:", err)
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
-		return
-	}
-
 	// Fetch user, tenant, and team details
 	var user models.User
 	var tenant models.Tenant
 	var team models.Team
+	var userID int
+	var e, err error
+
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	if id == "" {
+		// Retrieve the user's email and tenant ID from the JWT token in the context
+		ctx := r.Context()
+		email, err := auth.GetEmail(ctx)
+		if err != nil || email == "" {
+			log.Println("Missing user ID and email from token")
+			http.Error(w, "Missing user ID and email from token", http.StatusBadRequest)
+			return
+		}
+
+		tenantID, err := auth.GetTenantID(ctx)
+		if err != nil {
+			log.Println("Missing tenant ID from token")
+			http.Error(w, "Missing tenant ID from token", http.StatusBadRequest)
+			return
+		}
+
+		// Fetch user ID using email and tenant ID
+		err = db.DB.QueryRow(`
+			SELECT id FROM users WHERE email = $1 AND tenant_id = $2
+		`, email, tenantID).Scan(&userID)
+
+		if err != nil {
+			log.Println("Error fetching user ID:", err)
+			http.Error(w, "Error fetching user ID", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Convert userID from string to int
+		userID, e = strconv.Atoi(id)
+		if e != nil {
+			log.Println("Invalid user ID:", e)
+			http.Error(w, "Invalid user ID", http.StatusBadRequest)
+			return
+		}
+	}
+	// Convert userID from string to int
 
 	ctxTenantID, _ := auth.GetTenantID(r.Context())
 
