@@ -45,10 +45,13 @@ func main() {
 	secure.Use(func(next http.Handler) http.Handler {
 		return auth.AuthMiddleware(next, db.DB) // Wrap AuthMiddleware to match mux.MiddlewareFunc
 	})
+
 	secure.HandleFunc("/user/{id}", handlers.GetUserDetails).Methods("GET")
+	secure.HandleFunc("/userinfo", handlers.GetUserDetails).Methods("GET") // 👈 This is the fix
+	secure.HandleFunc("/user", handlers.UpdateUserDetailsHandler).Methods("PUT")
+
 	secure.HandleFunc("/user/tenant/{tenant_id}", handlers.GetUsersByTenant).Methods("GET")
 
-	secure.HandleFunc("/user", handlers.UpdateUserDetailsHandler).Methods("PUT")
 	log.Println("Routers End")
 	log.Println("Sentinel starting on :8080")
 	handler := auth.EnableCORS(r) // ✅ wrap router with CORS middleware
