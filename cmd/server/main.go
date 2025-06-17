@@ -51,8 +51,7 @@ func main() {
 	secure.HandleFunc("/user", handlers.UpdateUserDetailsHandler).Methods("PUT")
 	log.Println("Routers End")
 	log.Println("Sentinel starting on :8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
-	}
+	handler := auth.EnableCORS(r) // ✅ wrap router with CORS middleware
+	log.Fatal(http.ListenAndServe(":8080", handler))
+
 }
