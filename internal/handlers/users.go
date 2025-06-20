@@ -246,8 +246,9 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
+	role, _ := auth.GetRole(ctx)
 	// Allow update only if the user is an admin or is updating their own details
-	if currentUser.Role != "admin" {
+	if role != "admin" {
 		http.Error(w, "Unauthorized to update this user", http.StatusUnauthorized)
 		return
 	}
@@ -342,8 +343,10 @@ func GetUsersByTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role, _ := auth.GetRole(ctx)
+
 	// Check if the user is an admin and belongs to the same tenant
-	if currentUser.Role != "admin" || currentUser.TenantID != tenantID {
+	if role != "admin" || currentUser.TenantID != tenantID {
 		http.Error(w, "Unauthorized to access this tenant's users", http.StatusUnauthorized)
 		return
 	}
