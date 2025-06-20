@@ -420,3 +420,28 @@ func GetUsersByTenantDB(tenantID int) ([]models.User, error) {
 	}
 	return users, nil
 }
+
+func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	role, _ := auth.GetRole(ctx)
+	if role != "admin" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	vars := mux.Vars(r)
+	userIDStr := vars["id"]
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	_, err = db.DB.Exec(`DELETE FROM users WHERE id = $1`, userID)
+	if err != nil {
+		http.Error(w, "Error deleting user", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{"message": "User deleted successfully"})
+}

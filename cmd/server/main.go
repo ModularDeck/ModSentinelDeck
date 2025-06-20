@@ -50,8 +50,10 @@ func main() {
 	secure.HandleFunc("/userinfo", handlers.GetUserDetails).Methods("GET") // 👈 This is the fix
 	secure.HandleFunc("/user", handlers.UpdateUserDetailsHandler).Methods("PUT")
 	secure.HandleFunc("/user/tenant/{tenant_id}", handlers.GetUsersByTenant).Methods("GET")
+	secure.HandleFunc("/user/{id}", handlers.DeleteUserHandler).Methods("DELETE")
 
 	secure.HandleFunc("/team", handlers.CreateOrUpdateTeamHandler).Methods("POST", "PUT")
+	secure.HandleFunc("/team/{id}", handlers.DeleteTeamHandler).Methods("DELETE")
 
 	r.PathPrefix("/api").Handler(secure)
 	log.Println("Routers End")
