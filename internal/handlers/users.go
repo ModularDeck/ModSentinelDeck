@@ -182,17 +182,53 @@ func GetUserDetails(w http.ResponseWriter, r *http.Request) {
 
 	ctxTenantID, _ := auth.GetTenantID(r.Context())
 
+	var (
+		userIDVal     sql.NullInt64
+		userNameVal   sql.NullString
+		userEmailVal  sql.NullString
+		tenantIDVal   sql.NullInt64
+		tenantNameVal sql.NullString
+		teamIDVal     sql.NullInt64
+		teamNameVal   sql.NullString
+	)
+
 	err = db.DB.QueryRow(`
 		SELECT u.id, u.name, u.email, t.id, t.name, tm.id, tm.name
 		FROM users u
 		JOIN tenants t ON u.tenant_id = t.id
 		LEFT JOIN user_teams ut ON ut.user_id = u.id
 		LEFT JOIN teams tm ON tm.id = ut.team_id
-		WHERE u.id = $1 and u.tenant_id = $2 `, userID, ctxTenantID).Scan(&user.ID, &user.Name, &user.Email, &tenant.ID, &tenant.Name, &team.ID, &team.Name)
+		WHERE u.id = $1 and u.tenant_id = $2 `, userID, ctxTenantID).Scan(
+		&userIDVal, &userNameVal, &userEmailVal,
+		&tenantIDVal, &tenantNameVal,
+		&teamIDVal, &teamNameVal,
+	)
 
 	if err != nil {
 		http.Error(w, "Error fetching user details", http.StatusInternalServerError)
 		return
+	}
+
+	if userIDVal.Valid {
+		user.ID = int(userIDVal.Int64)
+	}
+	if userNameVal.Valid {
+		user.Name = userNameVal.String
+	}
+	if userEmailVal.Valid {
+		user.Email = userEmailVal.String
+	}
+	if tenantIDVal.Valid {
+		tenant.ID = int(tenantIDVal.Int64)
+	}
+	if tenantNameVal.Valid {
+		tenant.Name = tenantNameVal.String
+	}
+	if teamIDVal.Valid {
+		team.ID = int(teamIDVal.Int64)
+	}
+	if teamNameVal.Valid {
+		team.Name = teamNameVal.String
 	}
 
 	response := map[string]interface{}{
