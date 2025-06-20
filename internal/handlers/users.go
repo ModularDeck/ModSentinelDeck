@@ -318,7 +318,7 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "User details updated successfully"})
 }
 
-// GetUsersByTenant retrieves users by tenant ID
+// GetUsersByTenant retrieves users by tenant ID along with tenant and team information
 func GetUsersByTenant(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	tenantID, err := strconv.Atoi(vars["tenant_id"])
@@ -354,8 +354,43 @@ func GetUsersByTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch tenant information
+	var tenant models.Tenant
+	err = db.DB.QueryRow(`
+		SELECT id, name, description 
+		FROM tenants 
+		WHERE id = $1
+	`, tenantID).Scan(&tenant.ID, &tenant.Name, &tenant.Description)
+	if err != nil {
+		http.Error(w, "Failed to fetch tenant information", http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch team information for each user
+	for i := range users {
+		var team models.Team
+		err = db.DB.QueryRow(`
+			SELECT t.id, t.name, t.description 
+			FROM teams t
+			JOIN user_teams ut ON t.id = ut.team_id
+			WHERE ut.user_id = $1
+		`, users[i].ID).Scan(&team.ID, &team.Name, &team.Description)
+		if err == nil {
+			users[i].Team = team
+		}
+	}
+
+	response := map[string]interface{}{
+		"tenant": map[string]interface{}{
+			"id":          tenant.ID,
+			"name":        tenant.Name,
+			"description": tenant.Description,
+		},
+		"users": users,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+	json.NewEncoder(w).Encode(response)
 }
 
 func GetUsersByTenantDB(tenantID int) ([]models.User, error) {
