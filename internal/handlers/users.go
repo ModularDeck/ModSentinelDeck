@@ -527,6 +527,17 @@ func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error deleting user", http.StatusInternalServerError)
 		return
 	}
-
+	_, err = db.DB.Exec(`DELETE FROM user_teams WHERE user_id = $1`, userID)
+	if err != nil {
+		http.Error(w, "Error deleting user teams", http.StatusInternalServerError)
+		return
+	}
+	// _, err = db.DB.Exec(`DELETE FROM token_blacklist WHERE user_id = $1
+	// `, userID)
+	// if err != nil {
+	// 	http.Error(w, "Error deleting user tokens", http.StatusInternalServerError)
+	// 	return
+	// }
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "User deleted successfully"})
 }
