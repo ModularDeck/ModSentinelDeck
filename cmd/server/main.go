@@ -52,6 +52,7 @@ func main() {
 	secure.HandleFunc("/user/tenant/{tenant_id}", handlers.GetUsersByTenant).Methods("GET")
 	secure.HandleFunc("/user/{id}", handlers.DeleteUserHandler).Methods("DELETE")
 
+	secure.HandleFunc("/team", handlers.GetTeamsByTenantHandler).Methods("GET")
 	secure.HandleFunc("/team", handlers.CreateOrUpdateTeamHandler).Methods("POST", "PUT")
 	secure.HandleFunc("/team/{id}", handlers.DeleteTeamHandler).Methods("DELETE")
 

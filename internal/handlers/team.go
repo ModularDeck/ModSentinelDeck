@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"sentinel/internal/auth"
 	"sentinel/internal/db"
@@ -24,13 +25,14 @@ func CreateOrUpdateTeamHandler(w http.ResponseWriter, r *http.Request) {
 
 func createOrUpdateTeam(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	ctx := r.Context()
-	role, err := auth.GetRole(ctx)
-	if err != nil {
-		http.Error(w, "Unauthorized: unable to determine role", http.StatusUnauthorized)
-		return
-	}
+	role, _ := auth.GetRole(ctx)
 	if role != "admin" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	tenantId, _ := auth.GetTenantID(ctx)
+	if tenantId == 0 {
+		http.Error(w, "Tenant ID is required", http.StatusBadRequest)
 		return
 	}
 
@@ -41,9 +43,11 @@ func createOrUpdateTeam(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	}
 
 	if r.Method == http.MethodPost {
+		// Check if a team with the same name and tenant_id already exists
 		_, err := db.Exec(`INSERT INTO teams (name, description, tenant_id) VALUES ($1, $2, $3)`,
-			req.Name, req.Description, req.TenantID)
+			req.Name, req.Description, tenantId)
 		if err != nil {
+			log.Println("Error creating team:", err)
 			http.Error(w, "Error creating team", http.StatusInternalServerError)
 			return
 		}
@@ -92,3 +96,40 @@ func DeleteTeamHandler(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(map[string]string{"message": "Team deleted successfully"})
 }
+
+// GetTeamsByTenantHandler retrieves all teams for a given tenant
+func GetTeamsByTenantHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	role, _ := auth.GetRole(ctx)
+	if role != "admin" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	tenantID, _ := auth.GetTenantID(ctx)
+
+	rows, err := db.DB.Query(`SELECT id, name, description FROM teams WHERE tenant_id = $1`, tenantID)
+	if err != nil {
+		http.Error(w, "Error retrieving teams", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var teams []TeamRequest
+	for rows.Next() {
+		var team TeamRequest
+		if err := rows.Scan(&team.ID, &team.Name, &team.Description); err != nil {
+			http.Error(w, "Error scanning team", http.StatusInternalServerError)
+			return
+		}
+		team.TenantID = tenantID // Set the tenant ID for each team
+		teams = append(teams, team)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(teams)
+	w.WriteHeader(http.StatusOK)
+
+}
+
+// GetTeamDetailsHandler retrieves details of a specific team

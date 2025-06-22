@@ -38,7 +38,6 @@ func AuthMiddleware(next http.Handler, dbInstance *sql.DB) http.Handler {
 		// Extract token
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := ValidateToken(tokenStr) // Ensure ValidateToken is implemented and imported
-		log.Printf("Printing token %s", tokenStr)
 		if err != nil {
 			log.Println("Middleware error")
 			log.Println(err)
@@ -70,7 +69,6 @@ func AuthMiddleware(next http.Handler, dbInstance *sql.DB) http.Handler {
 func GetTenantID(ctx context.Context) (int, error) {
 	tenantIDValue := ctx.Value(TenantIDKey) // Fetch from context using tenantIDKey
 	tenantID, ok := tenantIDValue.(int)
-	log.Printf("tenantid %x", tenantID)
 
 	if !ok {
 		log.Println("Error: tenant_id not found in context or invalid type")
@@ -83,10 +81,8 @@ func GetTenantID(ctx context.Context) (int, error) {
 // Replace this stub with your actual implementation as needed.
 func GetRole(ctx context.Context) (string, error) {
 	// Print all known context keys and their values for debugging
-	email := ctx.Value(EmailKey)
-	tenantID := ctx.Value(TenantIDKey)
+
 	role := ctx.Value(RoleKey)
-	log.Printf("Context values - EmailKey: %v, TenantIDKey: %v, RoleKey: %v", email, tenantID, role)
 
 	roleValue, ok := role.(string)
 	if !ok {
@@ -100,7 +96,6 @@ func GetRole(ctx context.Context) (string, error) {
 func GetEmail(ctx context.Context) (string, error) {
 	emailValue := ctx.Value(EmailKey) // Fetch from context using emailKey
 	email, ok := emailValue.(string)
-	log.Printf("email: %s", email)
 
 	if !ok {
 		log.Println("Error: email not found in context or invalid type")

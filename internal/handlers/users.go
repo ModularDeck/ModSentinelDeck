@@ -332,12 +332,61 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	// Update or create a new team for the user
 	if req.TeamName != "" {
 		var teamID int
-		err = db.QueryRow(`SELECT id FROM teams WHERE name=$1 AND tenant_id=(SELECT tenant_id FROM users WHERE id=$2)`, req.TeamName, req.UserID).Scan(&teamID)
-		if err == nil {
-			// Team exists, update user_team relation
-			_, err = db.Exec(`UPDATE user_teams SET team_id=$1 WHERE user_id=$2`, teamID, req.UserID)
+		tenantID := 0
+		// Get tenant_id for the user
+		err = db.QueryRow(`SELECT tenant_id FROM users WHERE id=$1`, req.UserID).Scan(&tenantID)
+		if err != nil {
+			http.Error(w, "Error fetching tenant for user", http.StatusInternalServerError)
+			return
+		}
+
+		// Try to get the team ID, or insert if not exists
+		err = db.QueryRow(`SELECT id FROM teams WHERE name=$1 AND tenant_id=$2`, req.TeamName, tenantID).Scan(&teamID)
+		if err == sql.ErrNoRows {
+			// Insert new team
+			err = db.QueryRow(`
+				INSERT INTO teams (tenant_id, name, description, created_at, updated_at)
+				VALUES ($1, $2, $3, NOW(), NOW())
+				RETURNING id
+			`, tenantID, req.TeamName, "Team for "+req.TeamName).Scan(&teamID)
 			if err != nil {
-				http.Error(w, "Error updating user team", http.StatusInternalServerError)
+				http.Error(w, "Error creating team", http.StatusInternalServerError)
+				return
+			}
+
+		} else if err != nil {
+			http.Error(w, "Error fetching team", http.StatusInternalServerError)
+			return
+		} else {
+			// Update existing team
+			_, err = db.Exec(`UPDATE teams SET name=$1, updated_at=NOW() WHERE id=$2`, req.TeamName, teamID)
+			if err != nil {
+				http.Error(w, "Error updating team", http.StatusInternalServerError)
+				return
+			}
+		}
+		log.Printf("Team ID: %d, User ID: %d", teamID, req.UserID)
+
+		res, err := db.Exec(`
+				UPDATE user_teams SET role=COALESCE($1, role), updated_at=NOW(), team_id=$3
+				WHERE user_id=$2
+			`, req.Role, req.UserID, teamID)
+		if err != nil {
+			http.Error(w, "Error updating user team", http.StatusInternalServerError)
+			return
+		}
+		rowsAffected, err := res.RowsAffected()
+		if err != nil {
+			http.Error(w, "Error checking update result", http.StatusInternalServerError)
+			return
+		}
+		if rowsAffected == 0 {
+			_, err = db.Exec(`
+				INSERT INTO user_teams (user_id, team_id, role, created_at, updated_at)
+				VALUES ($1, $2, $3, NOW(), NOW())
+			`, req.UserID, teamID, req.Role)
+			if err != nil {
+				http.Error(w, "Error inserting user team", http.StatusInternalServerError)
 				return
 			}
 		}
