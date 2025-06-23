@@ -6,7 +6,7 @@ POSTGRES_SERVICE=k8s/base/postgres-service.yml
 APP_DEPLOYMENT=k8s/base/deployment.yml
 APP_SERVICE=k8s/base/service.yml
 
-IMAGE_TAG=v1.0.5
+IMAGE_TAG=v1.0.6
 
 .PHONY: all up build-image postgres app port-forward run stop clean
 

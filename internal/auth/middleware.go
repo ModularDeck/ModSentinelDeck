@@ -23,6 +23,7 @@ type CtxKey string
 const (
 	EmailKey    CtxKey = "email"
 	TenantIDKey CtxKey = "tenant_id"
+	RoleKey     CtxKey = "role"
 )
 
 // AuthMiddleware checks for the JWT token and validates it
@@ -37,7 +38,6 @@ func AuthMiddleware(next http.Handler, dbInstance *sql.DB) http.Handler {
 		// Extract token
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 		claims, err := ValidateToken(tokenStr) // Ensure ValidateToken is implemented and imported
-		log.Printf("Printing token %s", tokenStr)
 		if err != nil {
 			log.Println("Middleware error")
 			log.Println(err)
@@ -57,6 +57,7 @@ func AuthMiddleware(next http.Handler, dbInstance *sql.DB) http.Handler {
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, EmailKey, claims.Email)
 		ctx = context.WithValue(ctx, TenantIDKey, claims.TenantID)
+		ctx = context.WithValue(ctx, RoleKey, claims.Role) // Add this line to store role in context
 		r = r.WithContext(ctx)
 
 		// Proceed to the next handler
@@ -68,7 +69,6 @@ func AuthMiddleware(next http.Handler, dbInstance *sql.DB) http.Handler {
 func GetTenantID(ctx context.Context) (int, error) {
 	tenantIDValue := ctx.Value(TenantIDKey) // Fetch from context using tenantIDKey
 	tenantID, ok := tenantIDValue.(int)
-	log.Printf("tenantid %x", tenantID)
 
 	if !ok {
 		log.Println("Error: tenant_id not found in context or invalid type")
@@ -77,11 +77,25 @@ func GetTenantID(ctx context.Context) (int, error) {
 	return tenantID, nil
 }
 
+// GetRole retrieves the user's role from the context.
+// Replace this stub with your actual implementation as needed.
+func GetRole(ctx context.Context) (string, error) {
+	// Print all known context keys and their values for debugging
+
+	role := ctx.Value(RoleKey)
+
+	roleValue, ok := role.(string)
+	if !ok {
+		log.Println("Error: role not found in context or invalid type")
+		return "", errors.New("role not found in context or invalid type")
+	}
+	return roleValue, nil
+}
+
 // GetEmail fetches the email from the context
 func GetEmail(ctx context.Context) (string, error) {
 	emailValue := ctx.Value(EmailKey) // Fetch from context using emailKey
 	email, ok := emailValue.(string)
-	log.Printf("email: %s", email)
 
 	if !ok {
 		log.Println("Error: email not found in context or invalid type")

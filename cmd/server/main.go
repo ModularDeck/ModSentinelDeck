@@ -49,12 +49,24 @@ func main() {
 	secure.HandleFunc("/user/{id}", handlers.GetUserDetails).Methods("GET")
 	secure.HandleFunc("/userinfo", handlers.GetUserDetails).Methods("GET") // 👈 This is the fix
 	secure.HandleFunc("/user", handlers.UpdateUserDetailsHandler).Methods("PUT")
-
 	secure.HandleFunc("/user/tenant/{tenant_id}", handlers.GetUsersByTenant).Methods("GET")
+	secure.HandleFunc("/user/{id}", handlers.DeleteUserHandler).Methods("DELETE")
 
+	secure.HandleFunc("/team", handlers.GetTeamsByTenantHandler).Methods("GET")
+	secure.HandleFunc("/team", handlers.CreateOrUpdateTeamHandler).Methods("POST", "PUT")
+	secure.HandleFunc("/team/{id}", handlers.DeleteTeamHandler).Methods("DELETE")
+
+	r.PathPrefix("/api").Handler(secure)
 	log.Println("Routers End")
+
 	log.Println("Sentinel starting on :8080")
 	handler := auth.EnableCORS(r) // ✅ wrap router with CORS middleware
+	r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+		pathTemplate, _ := route.GetPathTemplate()
+		methods, _ := route.GetMethods()
+		log.Printf("Registered route: %s %v\n", pathTemplate, methods)
+		return nil
+	})
 	log.Fatal(http.ListenAndServe(":8080", handler))
 
 }

@@ -100,7 +100,5 @@ func validateToken(tokenStr string) (*Claims, error) {
 		log.Println("Token is not valid.")
 		return nil, errors.New("invalid token")
 	}
-
-	log.Printf("Token valid, claims: %v\n", claims)
 	return claims, nil
 }

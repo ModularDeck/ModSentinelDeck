@@ -182,17 +182,53 @@ func GetUserDetails(w http.ResponseWriter, r *http.Request) {
 
 	ctxTenantID, _ := auth.GetTenantID(r.Context())
 
+	var (
+		userIDVal     sql.NullInt64
+		userNameVal   sql.NullString
+		userEmailVal  sql.NullString
+		tenantIDVal   sql.NullInt64
+		tenantNameVal sql.NullString
+		teamIDVal     sql.NullInt64
+		teamNameVal   sql.NullString
+	)
+
 	err = db.DB.QueryRow(`
 		SELECT u.id, u.name, u.email, t.id, t.name, tm.id, tm.name
 		FROM users u
 		JOIN tenants t ON u.tenant_id = t.id
 		LEFT JOIN user_teams ut ON ut.user_id = u.id
 		LEFT JOIN teams tm ON tm.id = ut.team_id
-		WHERE u.id = $1 and u.tenant_id = $2 `, userID, ctxTenantID).Scan(&user.ID, &user.Name, &user.Email, &tenant.ID, &tenant.Name, &team.ID, &team.Name)
+		WHERE u.id = $1 and u.tenant_id = $2 `, userID, ctxTenantID).Scan(
+		&userIDVal, &userNameVal, &userEmailVal,
+		&tenantIDVal, &tenantNameVal,
+		&teamIDVal, &teamNameVal,
+	)
 
 	if err != nil {
 		http.Error(w, "Error fetching user details", http.StatusInternalServerError)
 		return
+	}
+
+	if userIDVal.Valid {
+		user.ID = int(userIDVal.Int64)
+	}
+	if userNameVal.Valid {
+		user.Name = userNameVal.String
+	}
+	if userEmailVal.Valid {
+		user.Email = userEmailVal.String
+	}
+	if tenantIDVal.Valid {
+		tenant.ID = int(tenantIDVal.Int64)
+	}
+	if tenantNameVal.Valid {
+		tenant.Name = tenantNameVal.String
+	}
+	if teamIDVal.Valid {
+		team.ID = int(teamIDVal.Int64)
+	}
+	if teamNameVal.Valid {
+		team.Name = teamNameVal.String
 	}
 
 	response := map[string]interface{}{
@@ -246,8 +282,9 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
 	}
+	role, _ := auth.GetRole(ctx)
 	// Allow update only if the user is an admin or is updating their own details
-	if currentUser.Role != "admin" {
+	if role != "admin" {
 		http.Error(w, "Unauthorized to update this user", http.StatusUnauthorized)
 		return
 	}
@@ -295,12 +332,61 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	// Update or create a new team for the user
 	if req.TeamName != "" {
 		var teamID int
-		err = db.QueryRow(`SELECT id FROM teams WHERE name=$1 AND tenant_id=(SELECT tenant_id FROM users WHERE id=$2)`, req.TeamName, req.UserID).Scan(&teamID)
-		if err == nil {
-			// Team exists, update user_team relation
-			_, err = db.Exec(`UPDATE user_teams SET team_id=$1 WHERE user_id=$2`, teamID, req.UserID)
+		tenantID := 0
+		// Get tenant_id for the user
+		err = db.QueryRow(`SELECT tenant_id FROM users WHERE id=$1`, req.UserID).Scan(&tenantID)
+		if err != nil {
+			http.Error(w, "Error fetching tenant for user", http.StatusInternalServerError)
+			return
+		}
+
+		// Try to get the team ID, or insert if not exists
+		err = db.QueryRow(`SELECT id FROM teams WHERE name=$1 AND tenant_id=$2`, req.TeamName, tenantID).Scan(&teamID)
+		if err == sql.ErrNoRows {
+			// Insert new team
+			err = db.QueryRow(`
+				INSERT INTO teams (tenant_id, name, description, created_at, updated_at)
+				VALUES ($1, $2, $3, NOW(), NOW())
+				RETURNING id
+			`, tenantID, req.TeamName, "Team for "+req.TeamName).Scan(&teamID)
 			if err != nil {
-				http.Error(w, "Error updating user team", http.StatusInternalServerError)
+				http.Error(w, "Error creating team", http.StatusInternalServerError)
+				return
+			}
+
+		} else if err != nil {
+			http.Error(w, "Error fetching team", http.StatusInternalServerError)
+			return
+		} else {
+			// Update existing team
+			_, err = db.Exec(`UPDATE teams SET name=$1, updated_at=NOW() WHERE id=$2`, req.TeamName, teamID)
+			if err != nil {
+				http.Error(w, "Error updating team", http.StatusInternalServerError)
+				return
+			}
+		}
+		log.Printf("Team ID: %d, User ID: %d", teamID, req.UserID)
+
+		res, err := db.Exec(`
+				UPDATE user_teams SET role=COALESCE($1, role), updated_at=NOW(), team_id=$3
+				WHERE user_id=$2
+			`, req.Role, req.UserID, teamID)
+		if err != nil {
+			http.Error(w, "Error updating user team", http.StatusInternalServerError)
+			return
+		}
+		rowsAffected, err := res.RowsAffected()
+		if err != nil {
+			http.Error(w, "Error checking update result", http.StatusInternalServerError)
+			return
+		}
+		if rowsAffected == 0 {
+			_, err = db.Exec(`
+				INSERT INTO user_teams (user_id, team_id, role, created_at, updated_at)
+				VALUES ($1, $2, $3, NOW(), NOW())
+			`, req.UserID, teamID, req.Role)
+			if err != nil {
+				http.Error(w, "Error inserting user team", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -318,7 +404,7 @@ func UpdateUserDetails(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "User details updated successfully"})
 }
 
-// GetUsersByTenant retrieves users by tenant ID
+// GetUsersByTenant retrieves users by tenant ID along with tenant and team information
 func GetUsersByTenant(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	tenantID, err := strconv.Atoi(vars["tenant_id"])
@@ -342,8 +428,10 @@ func GetUsersByTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role, _ := auth.GetRole(ctx)
+
 	// Check if the user is an admin and belongs to the same tenant
-	if currentUser.Role != "admin" || currentUser.TenantID != tenantID {
+	if role != "admin" || currentUser.TenantID != tenantID {
 		http.Error(w, "Unauthorized to access this tenant's users", http.StatusUnauthorized)
 		return
 	}
@@ -354,8 +442,43 @@ func GetUsersByTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Fetch tenant information
+	var tenant models.Tenant
+	err = db.DB.QueryRow(`
+		SELECT id, name, description 
+		FROM tenants 
+		WHERE id = $1
+	`, tenantID).Scan(&tenant.ID, &tenant.Name, &tenant.Description)
+	if err != nil {
+		http.Error(w, "Failed to fetch tenant information", http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch team information for each user
+	for i := range users {
+		var team models.Team
+		err = db.DB.QueryRow(`
+			SELECT t.id, t.name, t.description 
+			FROM teams t
+			JOIN user_teams ut ON t.id = ut.team_id
+			WHERE ut.user_id = $1
+		`, users[i].ID).Scan(&team.ID, &team.Name, &team.Description)
+		if err == nil {
+			users[i].Team = team
+		}
+	}
+
+	response := map[string]interface{}{
+		"tenant": map[string]interface{}{
+			"id":          tenant.ID,
+			"name":        tenant.Name,
+			"description": tenant.Description,
+		},
+		"users": users,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+	json.NewEncoder(w).Encode(response)
 }
 
 func GetUsersByTenantDB(tenantID int) ([]models.User, error) {
@@ -381,4 +504,40 @@ func GetUsersByTenantDB(tenantID int) ([]models.User, error) {
 		return nil, err
 	}
 	return users, nil
+}
+
+func DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	role, _ := auth.GetRole(ctx)
+	if role != "admin" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	vars := mux.Vars(r)
+	userIDStr := vars["id"]
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	_, err = db.DB.Exec(`DELETE FROM users WHERE id = $1`, userID)
+	if err != nil {
+		http.Error(w, "Error deleting user", http.StatusInternalServerError)
+		return
+	}
+	_, err = db.DB.Exec(`DELETE FROM user_teams WHERE user_id = $1`, userID)
+	if err != nil {
+		http.Error(w, "Error deleting user teams", http.StatusInternalServerError)
+		return
+	}
+	// _, err = db.DB.Exec(`DELETE FROM token_blacklist WHERE user_id = $1
+	// `, userID)
+	// if err != nil {
+	// 	http.Error(w, "Error deleting user tokens", http.StatusInternalServerError)
+	// 	return
+	// }
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "User deleted successfully"})
 }
